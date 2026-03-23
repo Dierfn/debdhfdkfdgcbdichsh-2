@@ -80,26 +80,26 @@ jobs:
         shell: msys2 {0}
         run: cmake --install build
 
-      - name: Deploy all DLLs with windeployqt6 and ntldd
+      - name: Copy MSYS2 DLLs with ntldd
         shell: msys2 {0}
         run: |
           cd install
-
-          # Run windeployqt6 to copy all Qt DLLs and plugins automatically
-          /ucrt64/bin/windeployqt6.exe dyrzclient.exe --no-translations --no-system-d3d-compiler --no-opengl-sw
-
-          # Use ntldd to find any remaining non-Qt DLLs from MSYS2
           ntldd -R dyrzclient.exe | grep -i ucrt64 | awk -F'=> ' '{print $2}' | awk '{print $1}' | while read dll; do
             [ -f "$dll" ] && cp "$dll" . 2>/dev/null || true
           done
-
-          # Make sure libstdc++ and threading DLLs are present
           cp /ucrt64/bin/libstdc++-6.dll . 2>/dev/null || true
           cp /ucrt64/bin/libgcc_s_seh-1.dll . 2>/dev/null || true
           cp /ucrt64/bin/libwinpthread-1.dll . 2>/dev/null || true
+          echo "MSYS2 DLLs copied"
 
-          echo "=== Deployed files ==="
-          ls -la
+      - name: Deploy Qt DLLs with windeployqt6
+        shell: powershell
+        run: |
+          $env:PATH = "C:\msys64\ucrt64\bin;" + $env:PATH
+          $exe = (Get-Item "install\dyrzclient.exe").FullName
+          C:\msys64\ucrt64\bin\windeployqt6.exe $exe --no-translations --no-system-d3d-compiler --no-opengl-sw --no-compiler-runtime
+          Write-Host "Qt DLLs deployed"
+          Get-ChildItem install
 
       - name: Upload
         uses: actions/upload-artifact@v4
