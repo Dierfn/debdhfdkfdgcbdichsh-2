@@ -77,11 +77,4 @@ jobs:
 
       - name: Install
         shell: msys2 {0}
-        run: cmake --install build
-
-      - name: Upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: DyrzClient-Windows
-          path: install/
-          retention-days: 30
+        run: cmake --instal
