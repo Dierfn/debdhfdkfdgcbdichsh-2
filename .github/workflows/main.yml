@@ -77,4 +77,53 @@ jobs:
 
       - name: Install
         shell: msys2 {0}
-        run: cmake --instal
+        run: cmake --install build
+
+      - name: Copy Qt DLLs and runtime files
+        shell: msys2 {0}
+        run: |
+          cp /ucrt64/bin/Qt6Core.dll install/
+          cp /ucrt64/bin/Qt6Gui.dll install/
+          cp /ucrt64/bin/Qt6Widgets.dll install/
+          cp /ucrt64/bin/Qt6Network.dll install/
+          cp /ucrt64/bin/Qt6NetworkAuth.dll install/
+          cp /ucrt64/bin/Qt6Svg.dll install/
+          cp /ucrt64/bin/Qt6Xml.dll install/
+          cp /ucrt64/bin/Qt6Concurrent.dll install/
+          cp /ucrt64/bin/libgcc_s_seh-1.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libstdc++-6.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libwinpthread-1.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libzstd.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/zlib1.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libarchive-13.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libcrypto-3-x64.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libssl-3-x64.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libquazip1-qt6.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libcmark.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libqrencode.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libbz2-1.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/liblzma-5.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/liblz4.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libpcre2-16-0.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libdouble-conversion.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libicudt74.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libicuin74.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libicuuc74.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libharfbuzz-0.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libmd4c.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libpng16-16.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libjpeg-8.dll install/ 2>/dev/null || true
+          cp /ucrt64/bin/libfreetype-6.dll install/ 2>/dev/null || true
+          mkdir -p install/platforms install/styles install/imageformats install/tls
+          cp /ucrt64/share/qt6/plugins/platforms/qwindows.dll install/platforms/
+          cp /ucrt64/share/qt6/plugins/styles/qwindowsvistastyle.dll install/styles/ 2>/dev/null || true
+          cp /ucrt64/share/qt6/plugins/imageformats/*.dll install/imageformats/ 2>/dev/null || true
+          cp /ucrt64/share/qt6/plugins/tls/*.dll install/tls/ 2>/dev/null || true
+          echo "DLLs copied!"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: DyrzClient-Windows
+          path: install/
+          retention-days: 30
