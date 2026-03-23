@@ -45,6 +45,7 @@ jobs:
             qrencode:p
             vulkan-headers:p
             clang:p
+            ntldd:p
 
       - name: Configure CMake
         shell: msys2 {0}
@@ -79,26 +80,26 @@ jobs:
         shell: msys2 {0}
         run: cmake --install build
 
-      - name: Copy all dependencies automatically
+      - name: Deploy all DLLs with windeployqt6 and ntldd
         shell: msys2 {0}
         run: |
           cd install
-          # Use ldd to find all required DLLs automatically
-          ldd dyrzclient.exe | grep /ucrt64 | awk '{print $3}' | xargs -I{} cp {} . 2>/dev/null || true
-          
-          # Copy Qt plugins
-          mkdir -p platforms styles imageformats tls iconengines
-          cp /ucrt64/share/qt6/plugins/platforms/qwindows.dll platforms/ 2>/dev/null || true
-          cp /ucrt64/share/qt6/plugins/styles/*.dll styles/ 2>/dev/null || true
-          cp /ucrt64/share/qt6/plugins/imageformats/*.dll imageformats/ 2>/dev/null || true
-          cp /ucrt64/share/qt6/plugins/tls/*.dll tls/ 2>/dev/null || true
-          cp /ucrt64/share/qt6/plugins/iconengines/*.dll iconengines/ 2>/dev/null || true
 
-          # List what we have
-          echo "=== Files in install ==="
+          # Run windeployqt6 to copy all Qt DLLs and plugins automatically
+          /ucrt64/bin/windeployqt6.exe dyrzclient.exe --no-translations --no-system-d3d-compiler --no-opengl-sw
+
+          # Use ntldd to find any remaining non-Qt DLLs from MSYS2
+          ntldd -R dyrzclient.exe | grep -i ucrt64 | awk -F'=> ' '{print $2}' | awk '{print $1}' | while read dll; do
+            [ -f "$dll" ] && cp "$dll" . 2>/dev/null || true
+          done
+
+          # Make sure libstdc++ and threading DLLs are present
+          cp /ucrt64/bin/libstdc++-6.dll . 2>/dev/null || true
+          cp /ucrt64/bin/libgcc_s_seh-1.dll . 2>/dev/null || true
+          cp /ucrt64/bin/libwinpthread-1.dll . 2>/dev/null || true
+
+          echo "=== Deployed files ==="
           ls -la
-          echo "=== Platforms ==="
-          ls platforms/
 
       - name: Upload
         uses: actions/upload-artifact@v4
