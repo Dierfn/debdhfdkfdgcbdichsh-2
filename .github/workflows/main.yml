@@ -23,6 +23,7 @@ jobs:
           }
 
       - name: Setup MSYS2
+        id: msys2
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -45,6 +46,7 @@ jobs:
             qrencode:p
             vulkan-headers:p
             clang:p
+            ntldd:p
 
       - name: Configure CMake
         shell: msys2 {0}
@@ -79,48 +81,33 @@ jobs:
         shell: msys2 {0}
         run: cmake --install build
 
-      - name: Find exe location
-        shell: powershell
+      - name: Copy all DLLs using ntldd
+        shell: msys2 {0}
         run: |
-          $exe = Get-ChildItem -Recurse -Filter "dyrzclient.exe" install | Select-Object -First 1
-          Write-Host "Found exe at: $($exe.FullName)"
-          echo "EXE_PATH=$($exe.FullName)" >> $env:GITHUB_ENV
-          echo "EXE_DIR=$($exe.DirectoryName)" >> $env:GITHUB_ENV
+          EXE=$(find install -name "dyrzclient.exe" | head -1)
+          EXEDIR=$(dirname "$EXE")
+          echo "Exe at: $EXE in dir: $EXEDIR"
+          ntldd -R "$EXE" 2>/dev/null | grep -i "ucrt64" | sed 's/.*=> //' | sed 's/ (.*//' | while IFS= read -r dll; do
+            if [ -f "$dll" ]; then
+              cp "$dll" "$EXEDIR/" && echo "Copied: $dll"
+            fi
+          done
+          cp /ucrt64/bin/libstdc++-6.dll "$EXEDIR/" 2>/dev/null || true
+          cp /ucrt64/bin/libgcc_s_seh-1.dll "$EXEDIR/" 2>/dev/null || true
+          cp /ucrt64/bin/libwinpthread-1.dll "$EXEDIR/" 2>/dev/null || true
+          echo "Done. Files in $EXEDIR:"
+          ls "$EXEDIR"
 
-      - name: Deploy Qt DLLs with windeployqt6
-        shell: powershell
+      - name: Run windeployqt
+        shell: msys2 {0}
         run: |
-          $env:PATH = "C:\msys64\ucrt64\bin;" + $env:PATH
-          Write-Host "Deploying Qt DLLs to: $env:EXE_DIR"
-          C:\msys64\ucrt64\bin\windeployqt6.exe "$env:EXE_PATH" --no-translations --no-system-d3d-compiler --no-opengl-sw --no-compiler-runtime
-          Write-Host "Qt deployment done"
-
-      - name: Copy remaining MSYS2 DLLs
-        shell: powershell
-        run: |
-          $exeDir = "$env:EXE_DIR"
-          $msys2bin = "C:\msys64\ucrt64\bin"
-          $dlls = @(
-            "libstdc++-6.dll", "libgcc_s_seh-1.dll", "libwinpthread-1.dll",
-            "libzstd.dll", "zlib1.dll", "libarchive-13.dll",
-            "libcrypto-3-x64.dll", "libssl-3-x64.dll",
-            "libquazip1-qt6.dll", "libcmark.dll", "libqrencode.dll",
-            "libbz2-1.dll", "liblzma-5.dll", "liblz4.dll",
-            "libpcre2-16-0.dll", "libdouble-conversion.dll",
-            "libicudt74.dll", "libicuin74.dll", "libicuuc74.dll",
-            "libharfbuzz-0.dll", "libpng16-16.dll", "libfreetype-6.dll",
-            "libglib-2.0-0.dll", "libgraphite2.dll", "libbrotlidec.dll",
-            "libbrotlicommon.dll", "libintl-8.dll", "libiconv-2.dll"
-          )
-          foreach ($dll in $dlls) {
-            $src = Join-Path $msys2bin $dll
-            if (Test-Path $src) {
-              Copy-Item $src $exeDir -Force
-              Write-Host "Copied $dll"
-            }
-          }
-          Write-Host "All DLLs copied!"
-          Get-ChildItem $exeDir
+          EXE=$(find install -name "dyrzclient.exe" | head -1)
+          echo "Running windeployqt on: $EXE"
+          windeployqt-qt6 "$EXE" --no-translations --no-system-d3d-compiler --no-opengl-sw 2>/dev/null || \
+          windeployqt6 "$EXE" --no-translations --no-system-d3d-compiler --no-opengl-sw 2>/dev/null || \
+          echo "windeployqt not found, continuing anyway"
+          echo "Final file list:"
+          find install -name "*.dll" | head -30
 
       - name: Upload
         uses: actions/upload-artifact@v4
