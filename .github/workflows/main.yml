@@ -23,7 +23,6 @@ jobs:
           }
 
       - name: Setup MSYS2
-        id: msys2
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -81,33 +80,50 @@ jobs:
         shell: msys2 {0}
         run: cmake --install build
 
-      - name: Copy all DLLs using ntldd
+      - name: Bundle all DLLs
         shell: msys2 {0}
         run: |
-          EXE=$(find install -name "dyrzclient.exe" | head -1)
-          EXEDIR=$(dirname "$EXE")
-          echo "Exe at: $EXE in dir: $EXEDIR"
-          ntldd -R "$EXE" 2>/dev/null | grep -i "ucrt64" | sed 's/.*=> //' | sed 's/ (.*//' | while IFS= read -r dll; do
-            if [ -f "$dll" ]; then
-              cp "$dll" "$EXEDIR/" && echo "Copied: $dll"
+          set +e
+          EXEDIR="install"
+          echo "Bundling DLLs into $EXEDIR"
+
+          # Run windeployqt to get Qt DLLs and plugins
+          windeployqt-qt6 "$EXEDIR/dyrzclient.exe" --no-translations --no-system-d3d-compiler --no-opengl-sw || true
+
+          # Copy every single DLL from ucrt64/bin that the exe or any copied DLL might need
+          # Use ntldd to get the list, convert Windows paths to MSYS2 paths
+          ntldd -R "$EXEDIR/dyrzclient.exe" 2>/dev/null | grep -i "ucrt64" | while read line; do
+            # Extract the Windows path after =>
+            winpath=$(echo "$line" | grep -oP '(?<=> ).*?(?= \()')
+            if [ -n "$winpath" ]; then
+              # Convert Windows path to MSYS2 path
+              msyspath=$(cygpath "$winpath" 2>/dev/null)
+              if [ -f "$msyspath" ]; then
+                cp "$msyspath" "$EXEDIR/" 2>/dev/null && echo "Copied: $(basename $msyspath)"
+              fi
             fi
           done
-          cp /ucrt64/bin/libstdc++-6.dll "$EXEDIR/" 2>/dev/null || true
-          cp /ucrt64/bin/libgcc_s_seh-1.dll "$EXEDIR/" 2>/dev/null || true
-          cp /ucrt64/bin/libwinpthread-1.dll "$EXEDIR/" 2>/dev/null || true
-          echo "Done. Files in $EXEDIR:"
-          ls "$EXEDIR"
 
-      - name: Run windeployqt
-        shell: msys2 {0}
-        run: |
-          EXE=$(find install -name "dyrzclient.exe" | head -1)
-          echo "Running windeployqt on: $EXE"
-          windeployqt-qt6 "$EXE" --no-translations --no-system-d3d-compiler --no-opengl-sw 2>/dev/null || \
-          windeployqt6 "$EXE" --no-translations --no-system-d3d-compiler --no-opengl-sw 2>/dev/null || \
-          echo "windeployqt not found, continuing anyway"
-          echo "Final file list:"
-          find install -name "*.dll" | head -30
+          # Always manually copy these critical ones
+          for dll in \
+            libstdc++-6.dll libgcc_s_seh-1.dll libwinpthread-1.dll \
+            libzstd.dll zlib1.dll libarchive-13.dll \
+            libcrypto-3-x64.dll libssl-3-x64.dll \
+            libquazip1-qt6.dll libcmark.dll libqrencode.dll \
+            libbz2-1.dll liblzma-5.dll liblz4.dll \
+            libpcre2-16-0.dll libdouble-conversion.dll \
+            libicudt74.dll libicuin74.dll libicuuc74.dll \
+            libharfbuzz-0.dll libpng16-16.dll libfreetype-6.dll \
+            libglib-2.0-0.dll libgraphite2.dll libbrotlidec.dll \
+            libbrotlicommon.dll libintl-8.dll libiconv-2.dll \
+            libmd4c.dll libjpeg-8.dll; do
+            [ -f "/ucrt64/bin/$dll" ] && cp "/ucrt64/bin/$dll" "$EXEDIR/" 2>/dev/null || true
+          done
+
+          echo "=== Final DLL count ==="
+          ls "$EXEDIR"/*.dll 2>/dev/null | wc -l
+          echo "=== All files ==="
+          ls "$EXEDIR"
 
       - name: Upload
         uses: actions/upload-artifact@v4
