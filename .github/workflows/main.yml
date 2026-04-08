@@ -45,7 +45,6 @@ jobs:
             qrencode:p
             vulkan-headers:p
             clang:p
-            ntldd:p
 
       - name: Configure CMake
         shell: msys2 {0}
@@ -70,7 +69,6 @@ jobs:
         shell: msys2 {0}
         run: |
           find build -name "*.ninja" | xargs sed -i 's/-mguard=cf//g; s/-Werror[^ ]*//g' 2>/dev/null || true
-          echo "Flags stripped"
 
       - name: Build
         shell: msys2 {0}
@@ -80,50 +78,28 @@ jobs:
         shell: msys2 {0}
         run: cmake --install build
 
-      - name: Bundle all DLLs
+      - name: Copy ALL DLLs and Qt plugins
         shell: msys2 {0}
         run: |
           set +e
-          EXEDIR="install"
-          echo "Bundling DLLs into $EXEDIR"
 
-          # Run windeployqt to get Qt DLLs and plugins
-          windeployqt-qt6 "$EXEDIR/dyrzclient.exe" --no-translations --no-system-d3d-compiler --no-opengl-sw || true
+          # Copy every single DLL from ucrt64/bin - guaranteed to include everything needed
+          echo "Copying all DLLs from ucrt64/bin..."
+          cp /ucrt64/bin/*.dll install/ 2>/dev/null || true
+          echo "DLLs copied"
 
-          # Copy every single DLL from ucrt64/bin that the exe or any copied DLL might need
-          # Use ntldd to get the list, convert Windows paths to MSYS2 paths
-          ntldd -R "$EXEDIR/dyrzclient.exe" 2>/dev/null | grep -i "ucrt64" | while read line; do
-            # Extract the Windows path after =>
-            winpath=$(echo "$line" | grep -oP '(?<=> ).*?(?= \()')
-            if [ -n "$winpath" ]; then
-              # Convert Windows path to MSYS2 path
-              msyspath=$(cygpath "$winpath" 2>/dev/null)
-              if [ -f "$msyspath" ]; then
-                cp "$msyspath" "$EXEDIR/" 2>/dev/null && echo "Copied: $(basename $msyspath)"
-              fi
-            fi
-          done
+          # Copy Qt plugins
+          mkdir -p install/platforms install/styles install/imageformats install/tls install/iconengines install/networkinformation
+          cp /ucrt64/share/qt6/plugins/platforms/*.dll install/platforms/ 2>/dev/null || true
+          cp /ucrt64/share/qt6/plugins/styles/*.dll install/styles/ 2>/dev/null || true
+          cp /ucrt64/share/qt6/plugins/imageformats/*.dll install/imageformats/ 2>/dev/null || true
+          cp /ucrt64/share/qt6/plugins/tls/*.dll install/tls/ 2>/dev/null || true
+          cp /ucrt64/share/qt6/plugins/iconengines/*.dll install/iconengines/ 2>/dev/null || true
+          cp /ucrt64/share/qt6/plugins/networkinformation/*.dll install/networkinformation/ 2>/dev/null || true
+          echo "Qt plugins copied"
 
-          # Always manually copy these critical ones
-          for dll in \
-            libstdc++-6.dll libgcc_s_seh-1.dll libwinpthread-1.dll \
-            libzstd.dll zlib1.dll libarchive-13.dll \
-            libcrypto-3-x64.dll libssl-3-x64.dll \
-            libquazip1-qt6.dll libcmark.dll libqrencode.dll \
-            libbz2-1.dll liblzma-5.dll liblz4.dll \
-            libpcre2-16-0.dll libdouble-conversion.dll \
-            libicudt74.dll libicuin74.dll libicuuc74.dll \
-            libharfbuzz-0.dll libpng16-16.dll libfreetype-6.dll \
-            libglib-2.0-0.dll libgraphite2.dll libbrotlidec.dll \
-            libbrotlicommon.dll libintl-8.dll libiconv-2.dll \
-            libmd4c.dll libjpeg-8.dll; do
-            [ -f "/ucrt64/bin/$dll" ] && cp "/ucrt64/bin/$dll" "$EXEDIR/" 2>/dev/null || true
-          done
-
-          echo "=== Final DLL count ==="
-          ls "$EXEDIR"/*.dll 2>/dev/null | wc -l
-          echo "=== All files ==="
-          ls "$EXEDIR"
+          echo "=== Total files ==="
+          ls install/*.dll | wc -l
 
       - name: Upload
         uses: actions/upload-artifact@v4
