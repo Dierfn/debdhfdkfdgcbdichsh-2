@@ -82,13 +82,7 @@ jobs:
         shell: msys2 {0}
         run: |
           set +e
-
-          # Copy every single DLL from ucrt64/bin - guaranteed to include everything needed
-          echo "Copying all DLLs from ucrt64/bin..."
           cp /ucrt64/bin/*.dll install/ 2>/dev/null || true
-          echo "DLLs copied"
-
-          # Copy Qt plugins
           mkdir -p install/platforms install/styles install/imageformats install/tls install/iconengines install/networkinformation
           cp /ucrt64/share/qt6/plugins/platforms/*.dll install/platforms/ 2>/dev/null || true
           cp /ucrt64/share/qt6/plugins/styles/*.dll install/styles/ 2>/dev/null || true
@@ -96,10 +90,14 @@ jobs:
           cp /ucrt64/share/qt6/plugins/tls/*.dll install/tls/ 2>/dev/null || true
           cp /ucrt64/share/qt6/plugins/iconengines/*.dll install/iconengines/ 2>/dev/null || true
           cp /ucrt64/share/qt6/plugins/networkinformation/*.dll install/networkinformation/ 2>/dev/null || true
-          echo "Qt plugins copied"
+          echo "DLLs copied"
 
-          echo "=== Total files ==="
-          ls install/*.dll | wc -l
+      - name: Create dummy translations file
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path "install\translations"
+          '{"formatVersion":1,"translations":[]}' | Out-File -FilePath "install\translations\index_v2.json" -Encoding UTF8
+          Write-Host "Translations file created"
 
       - name: Upload
         uses: actions/upload-artifact@v4
